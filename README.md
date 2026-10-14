@@ -23,6 +23,7 @@ Atlassian stand-in (the "mock") that implements Atlassian's side of the flow.
 **Contents:** [Architecture](#architecture) · [How it works](#how-it-works) ·
 [Repository layout](#repository-layout) · [Prerequisites](#prerequisites) ·
 [Set it up](#set-it-up) · [Try it in VS Code](#try-it-in-vs-code) ·
+[Validate with Postman](#validate-with-postman) ·
 [What the logs show](#what-the-logs-show) · [Design notes](#design-notes) ·
 [Limitations](#limitations-and-next-steps) · [Troubleshooting](#troubleshooting) ·
 [Clean up](#clean-up)
@@ -147,6 +148,7 @@ dana's own Atlassian account (right).*
 │   ├── configure.sh        users, apps, scopes, Key Manager, MCP server, policies, /idp (REST APIs)
 │   └── verify.sh           plays Copilot's sign-in and tool calls with curl
 ├── copilot-workspace/      open this folder in VS Code (.mcp.json → the gateway)
+├── postman/                the same path, one request at a time
 └── images/
 ```
 
@@ -315,6 +317,41 @@ after both changes.
 > `"servers"` key). Current GitHub Copilot migrates that file into `.mcp.json`
 > (`"mcpServers"`), which is why this workspace ships `.mcp.json` only.
 
+## Validate with Postman
+
+[`postman/id-jag-walkthrough.postman_collection.json`](postman/id-jag-walkthrough.postman_collection.json)
+replays Copilot's path one request at a time, plus the three hops the gateway
+makes out of sight, with tests on every request. It has six folders:
+1. **Discover:** the 401 and the sign-in metadata.
+2. **Sign in as Copilot:** authorization code + PKCE through the gateway.
+3. **Call tools through the gateway.**
+4. **What the gateway does on each call:** ① ID token → ID-JAG, ② ID-JAG →
+   Atlassian token, ③ the upstream call.
+5. **Refresh.**
+6. **Evidence at Atlassian.**
+
+1. Import the collection, and import `setup/postman-environment.json` as an
+   environment. `configure.sh` writes it; it holds the gateway's IS client
+   secret, which folder 4 needs.
+2. **Select the environment.** In the environment dropdown at the top right of
+   Postman (it shows *No environment*), choose **ID-JAG demo (local)**.
+   Importing it does not select it.
+3. **Settings → General:** turn off **SSL certificate verification**, because
+   the certificates are local and self-signed.
+4. **Run collection**, with the folders in order. Expect 19 requests and 40
+   passed assertions. The console (**View → Show Postman Console**) shows the
+   decoded ID-JAG: `typ: oauth-id-jag+jwt`, `sub: dana@example.com`, 300 s.
+
+If *Step 1: ID token → ID-JAG* fails:
+- **401:** the environment isn't selected.
+- **400:** the ID token expired. Run folder 2 again.
+
+From the command line:
+
+```bash
+npx newman run postman/id-jag-walkthrough.postman_collection.json -e setup/postman-environment.json --insecure
+```
+
 ## What the logs show
 
 Output of `verify.sh` from a fresh install. Nothing below contains a token value.
@@ -407,6 +444,7 @@ tail -f setup/wso2am-4.6.0/repository/logs/wso2carbon.log | grep ID-JAG
 | No client ID prompt, or an old sign-in is reused | Run **Authentication: Remove Dynamic Authentication Providers**, then call a tool again. |
 | IS shows `callback.not.match` | Re-run `./scripts/configure.sh`. |
 | A tool answers *"Sign in again: the gateway has no ID token"* | API Manager restarted and lost the ID tokens it kept. Sign out of `localhost:8243` in the **Accounts** menu and call the tool again. |
+| Postman, folder 4 step 1: 401 / *gateway_client_secret is wrong* | Select the environment imported from `setup/postman-environment.json`. If you set the variable by hand instead, put it in the **Current value** column. |
 | Jira or Bitbucket tools refused: *"The access token does not allow you to access the requested resource"* | The token predates the role: sign out of `localhost:8243` in the **Accounts** menu and sign in again. |
 | A tool answers *"The upstream authorization could not be obtained"* | The mock is down (`curl localhost:9500/healthz`): `./scripts/start.sh`. |
 | `start.sh` times out | Check the logs: `setup/wso2is-7.3.0/repository/logs/wso2carbon.log`, `setup/wso2am-4.6.0/repository/logs/wso2carbon.log`, `setup/logs/mock.log`. |

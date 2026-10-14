@@ -1,0 +1,1029 @@
+{
+  "info": {
+    "name": "ID-JAG walkthrough: GitHub Copilot → WSO2 API Manager → Atlassian",
+    "description": "Walks the path GitHub Copilot takes, one request at a time: discovery, sign-in through\nthe gateway, tool calls, the gateway's three hidden hops by hand, refresh, and the\nevidence at Atlassian. Run the folders in order (or Run collection).\n\nBefore you start:\n1. The setup is running and configured (scripts/start.sh, scripts/configure.sh).\n2. Settings → General → turn off \"SSL certificate verification\" (local self-signed\n   certificates), or run with newman --insecure.\n3. For folder 4, import setup/postman-environment.json (written by scripts/configure.sh)\n   as an environment and select it. It holds gateway_client_secret, the gateway's\n   own IS client secret.\n\nSee the repository README for the full story.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Discover: where to sign in",
+      "description": "What GitHub Copilot does before it has a token. The gateway answers a tool call\nwith 401, its resource metadata names the gateway's own /idp as the place to sign\nin, and /idp relays WSO2 IS's metadata with the token endpoint pointed at the\ngateway. Sign-in pages stay at IS.",
+      "item": [
+        {
+          "name": "Call a tool without a token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway}}{{mcp_path}}",
+            "description": "Copilot's first tool call. API Manager answers 401 and points at the MCP server's resource metadata (RFC 9728).",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"atlassianUserInfo\",\n    \"arguments\": {}\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401: a token is required', () => pm.response.to.have.status(401));",
+                  "const challenge = pm.response.headers.get('WWW-Authenticate') || '';",
+                  "pm.test('WWW-Authenticate names the resource metadata', () => pm.expect(challenge).to.include('resource_metadata='));",
+                  "const m = challenge.match(/resource_metadata=\"([^\"]+)\"/);",
+                  "if (m) pm.collectionVariables.set('resource_metadata_url', m[1]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resource metadata (answered by the gateway policy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{resource_metadata_url}}",
+            "description": "IdJagTokenMediator answers this before API Manager does: sign in at the gateway's /idp, and ask for openid so the sign-in returns an ID token.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const md = pm.response.json();",
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('sign-in server is the gateway /idp', () => pm.expect(md.authorization_servers[0]).to.match(/\\/idp\\/oauth2\\/token$/));",
+                  "pm.test('scopes include openid and the tool scopes', () => pm.expect(md.scopes_supported).to.include.members(['openid', 'jira:read', 'bitbucket:read']));",
+                  "pm.collectionVariables.set('sign_in_server', md.authorization_servers[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign-in metadata, through /idp",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{sign_in_server}}/.well-known/openid-configuration",
+            "description": "WSO2 IS's OIDC metadata, relayed by the gateway. IdpProxyMediator points token_endpoint at the gateway (so it sees every token response) and removes registration_endpoint (so VS Code asks for a client ID).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const md = pm.response.json();",
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('token endpoint is the gateway', () => pm.expect(md.token_endpoint).to.eql(pm.variables.get('gateway') + '/idp/oauth2/token'));",
+                  "pm.test('authorize endpoint stays at IS', () => pm.expect(md.authorization_endpoint).to.eql(pm.variables.get('is_base') + '/oauth2/authorize'));",
+                  "pm.test('no dynamic registration offered', () => pm.expect(md).to.not.have.property('registration_endpoint'));",
+                  "pm.collectionVariables.set('authorize_endpoint', md.authorization_endpoint);",
+                  "pm.collectionVariables.set('token_endpoint', md.token_endpoint);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Sign in as Copilot (authorization code + PKCE)",
+      "description": "The browser part of Copilot's sign-in, one redirect at a time (automatic redirects\nare off for these requests). PKCE values are generated in the first request's\npre-request script. The code is exchanged at the gateway's /idp, which keeps the\nID token.",
+      "item": [
+        {
+          "name": "Authorize: IS shows its login page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{authorize_endpoint}}?response_type=code&client_id={{copilot_client_id}}&redirect_uri={{redirect_uri_enc}}&scope={{scope_enc}}&state=postman&code_challenge={{code_challenge}}&code_challenge_method=S256",
+            "description": "What VS Code opens in the browser. IS redirects to its login page with a sessionDataKey.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cj = require('crypto-js');",
+                  "const b64url = w => cj.enc.Base64.stringify(w).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+                  "const verifier = b64url(cj.lib.WordArray.random(32));",
+                  "pm.collectionVariables.set('code_verifier', verifier);",
+                  "pm.collectionVariables.set('code_challenge', b64url(cj.SHA256(verifier)));",
+                  "pm.collectionVariables.set('redirect_uri_enc', encodeURIComponent(pm.variables.get('redirect_uri')));",
+                  "pm.collectionVariables.set('scope_enc', encodeURIComponent('openid jira:read bitbucket:read'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('302 to the login page', () => pm.response.to.have.status(302));",
+                  "const loc = pm.response.headers.get('Location') || '';",
+                  "const m = loc.match(/[?&]sessionDataKey=([^&]+)/);",
+                  "pm.test('login page carries a sessionDataKey', () => pm.expect(m, loc).to.not.be.null);",
+                  "if (m) pm.collectionVariables.set('session_data_key', decodeURIComponent(m[1]));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Sign in as dana",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{is_base}}/commonauth",
+            "description": "The login form, submitted. IS sends the browser back to its authorize endpoint.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "usernameUserInput",
+                  "value": "{{username}}",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "{{username}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                },
+                {
+                  "key": "sessionDataKey",
+                  "value": "{{session_data_key}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('302 back to authorize', () => pm.response.to.have.status(302));",
+                  "let loc = pm.response.headers.get('Location') || '';",
+                  "if (loc.startsWith('/')) loc = pm.variables.get('is_base') + loc;",
+                  "pm.test('not an error page', () => pm.expect(loc).to.not.include('error'));",
+                  "pm.collectionVariables.set('next_url', loc);"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Authorize again: IS issues the code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{next_url}}",
+            "description": "IS redirects to VS Code's loopback listener (http://127.0.0.1:33418/) with the authorization code. Postman does not follow it; the test reads the code from the Location header.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('302 to the redirect URI', () => pm.response.to.have.status(302));",
+                  "const loc = pm.response.headers.get('Location') || '';",
+                  "pm.test('redirect URI is the loopback listener', () => pm.expect(loc.startsWith(pm.variables.get('redirect_uri'))).to.be.true);",
+                  "const m = loc.match(/[?&]code=([^&]+)/);",
+                  "pm.test('carries an authorization code', () => pm.expect(m, loc).to.not.be.null);",
+                  "if (m) pm.collectionVariables.set('code', decodeURIComponent(m[1]));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Exchange the code at the gateway (/idp)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{token_endpoint}}",
+            "description": "Relayed to WSO2 IS by the gateway. IdpProxyMediator keeps the ID token from the response, keyed by dana's sub, and passes the response on unchanged. API Manager's log shows: ID-JAG: kept the ID token for <sub>.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{copilot_client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "code",
+                  "value": "{{code}}",
+                  "type": "text"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{redirect_uri}}",
+                  "type": "text"
+                },
+                {
+                  "key": "code_verifier",
+                  "value": "{{code_verifier}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cj = require('crypto-js');",
+                  "function jwtPart(jwt, i) {",
+                  "    let s = jwt.split('.')[i].replace(/-/g, '+').replace(/_/g, '/');",
+                  "    while (s.length % 4) s += '=';",
+                  "    return JSON.parse(cj.enc.Base64.parse(s).toString(cj.enc.Utf8));",
+                  "}",
+                  "",
+                  "        const t = pm.response.json();",
+                  "        pm.test('200 with access, ID and refresh tokens', () => {",
+                  "            pm.response.to.have.status(200);",
+                  "            pm.expect(t).to.include.keys('access_token', 'id_token', 'refresh_token');",
+                  "        });",
+                  "        pm.test('scope includes the tool scopes (role atlassian-tools-user)', () => pm.expect(t.scope.split(' ')).to.include.members(['openid', 'jira:read', 'bitbucket:read']));",
+                  "        const id = jwtPart(t.id_token, 1);",
+                  "        pm.test('ID token audience includes the gateway client', () => pm.expect(id.aud).to.include(pm.variables.get('gateway_client_id')));",
+                  "        pm.collectionVariables.set('access_token', t.access_token);",
+                  "        pm.collectionVariables.set('id_token', t.id_token);",
+                  "        pm.collectionVariables.set('refresh_token', t.refresh_token);",
+                  "        console.log('ID token claims', id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Call tools through the gateway",
+      "description": "Copilot's tool calls carry only the IS access token. On each tools/call the gateway\nexchanges dana's kept ID token for an ID-JAG (step 1), redeems it at Atlassian\n(step 2) and calls the tool with dana's own Atlassian token (step 3). Folder 4\nreplays those steps by hand.",
+      "item": [
+        {
+          "name": "List tools (no token needed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway}}{{mcp_path}}",
+            "description": "Discovery is anonymous; only tools/call needs a token.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/list\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('9 tools', () => pm.expect(pm.response.json().result.tools).to.have.lengthOf(9));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Who am I? (atlassianUserInfo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway}}{{mcp_path}}",
+            "description": "No scope needed. The answer comes from dana's own Atlassian account.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"atlassianUserInfo\",\n    \"arguments\": {}\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function toolResult() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error, 'JSON-RPC error').to.be.undefined;",
+                  "    pm.expect(body.result.isError, 'tool error: ' + JSON.stringify(body.result.content)).to.not.equal(true);",
+                  "    return JSON.parse(body.result.content[0].text);",
+                  "}",
+                  "",
+                  "        const me = toolResult();",
+                  "        pm.test('dana', () => pm.expect(me.emailAddress).to.eql('dana@example.com'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Jira (needs jira:read)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway}}{{mcp_path}}",
+            "description": "API Manager checks jira:read on the IS token before the gateway policy runs.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"searchJiraIssuesUsingJql\",\n    \"arguments\": {\n      \"jql\": \"project = OPS\",\n      \"maxResults\": 3\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function toolResult() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error, 'JSON-RPC error').to.be.undefined;",
+                  "    pm.expect(body.result.isError, 'tool error: ' + JSON.stringify(body.result.content)).to.not.equal(true);",
+                  "    return JSON.parse(body.result.content[0].text);",
+                  "}",
+                  "",
+                  "        const r = toolResult();",
+                  "        pm.test('OPS issues', () => pm.expect(r.total).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Bitbucket (needs bitbucket:read)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway}}{{mcp_path}}",
+            "description": "dana sees only her own repositories (platform-api, not web-frontend).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"searchBitbucketRepositories\",\n    \"arguments\": {\n      \"query\": \"platform\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function toolResult() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error, 'JSON-RPC error').to.be.undefined;",
+                  "    pm.expect(body.result.isError, 'tool error: ' + JSON.stringify(body.result.content)).to.not.equal(true);",
+                  "    return JSON.parse(body.result.content[0].text);",
+                  "}",
+                  "",
+                  "        const r = toolResult();",
+                  "        pm.test('platform-api', () => pm.expect(r.repositories.map(x => x.slug)).to.include('platform-api'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Someone else's ID token is refused",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-ID-Token",
+                "value": "{{forged_id_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway}}{{mcp_path}}",
+            "description": "The gateway accepts an X-ID-Token header only if it names the signed-in user; otherwise an ID-JAG would be issued for someone else.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"atlassianUserInfo\",\n    \"arguments\": {}\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const enc = o => btoa(JSON.stringify(o)).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+                  "pm.collectionVariables.set('forged_id_token', enc({alg: 'RS256'}) + '.' + enc({sub: 'someone-else', exp: 9999999999}) + '.c2ln');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('explains why', () => pm.expect(pm.response.json().error.message).to.include('does not belong'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. What the gateway does on each call (by hand)",
+      "description": "The three hops IdJagTokenMediator makes inside the gateway, replayed with dana's ID\ntoken from folder 2. Step 1 authenticates as the gateway's own IS client, so select\nthe environment setup/postman-environment.json (written by scripts/configure.sh),\nwhich holds gateway_client_secret.",
+      "item": [
+        {
+          "name": "Step 1: ID token → ID-JAG (at WSO2 IS)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{is_base}}/oauth2/token",
+            "description": "RFC 8693 token exchange by the gateway's client. IS accepts the ID token because its audience includes wso2-mcp-gateway, and returns an ID-JAG: a 300-second JWT whose sub is dana's email. Needs gateway_client_secret: select the environment setup/postman-environment.json (written by scripts/configure.sh), or set the variable's Current value from setup/.state.env.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "urn:ietf:params:oauth:grant-type:token-exchange",
+                  "type": "text"
+                },
+                {
+                  "key": "subject_token",
+                  "value": "{{id_token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "subject_token_type",
+                  "value": "urn:ietf:params:oauth:token-type:id_token",
+                  "type": "text"
+                },
+                {
+                  "key": "requested_token_type",
+                  "value": "urn:ietf:params:oauth:token-type:id-jag",
+                  "type": "text"
+                },
+                {
+                  "key": "audience",
+                  "value": "{{atlassian_audience}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{gateway_client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{gateway_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Tolerate a value pasted with spaces or with its GATEWAY_CLIENT_SECRET= prefix.",
+                  "const raw = (pm.variables.get('gateway_client_secret') || '').trim().replace(/^GATEWAY_CLIENT_SECRET=/, '');",
+                  "pm.variables.set('gateway_client_secret', raw);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cj = require('crypto-js');",
+                  "function jwtPart(jwt, i) {",
+                  "    let s = jwt.split('.')[i].replace(/-/g, '+').replace(/_/g, '/');",
+                  "    while (s.length % 4) s += '=';",
+                  "    return JSON.parse(cj.enc.Base64.parse(s).toString(cj.enc.Utf8));",
+                  "}",
+                  "",
+                  "        pm.test('gateway_client_secret is set', () => pm.expect(pm.variables.get('gateway_client_secret'),",
+                  "            'select the environment setup/postman-environment.json, or set the Current value from setup/.state.env').to.not.be.empty);",
+                  "        if (pm.response.code === 401) {",
+                  "            pm.test('IS accepted the gateway client', () => pm.expect.fail(",
+                  "                'invalid_client: gateway_client_secret is wrong. Use setup/postman-environment.json, or copy the value from setup/.state.env into the Current value of gateway_client_secret'));",
+                  "            return;",
+                  "        }",
+                  "        const t = pm.response.json();",
+                  "        pm.test('200, issued_token_type id-jag', () => {",
+                  "            pm.response.to.have.status(200);",
+                  "            pm.expect(t.issued_token_type).to.eql('urn:ietf:params:oauth:token-type:id-jag');",
+                  "        });",
+                  "        const h = jwtPart(t.access_token, 0), c = jwtPart(t.access_token, 1);",
+                  "        pm.test('typ oauth-id-jag+jwt', () => pm.expect(h.typ).to.eql('oauth-id-jag+jwt'));",
+                  "        pm.test('sub is dana\\'s email', () => pm.expect(c.sub).to.eql('dana@example.com'));",
+                  "        pm.test('aud is Atlassian, client_id is the gateway', () => {",
+                  "            pm.expect([].concat(c.aud)).to.eql([pm.variables.get('atlassian_audience')]);",
+                  "            pm.expect(c.client_id).to.eql(pm.variables.get('gateway_client_id'));",
+                  "        });",
+                  "        pm.test('lives 300 s', () => pm.expect(c.exp - c.iat).to.eql(300));",
+                  "        pm.collectionVariables.set('id_jag', t.access_token);",
+                  "        console.log('ID-JAG header', h, 'claims', c);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 2: ID-JAG → Atlassian token (at Atlassian's authorization server)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{mock}}/oauth/token",
+            "description": "RFC 7523 jwt-bearer grant. Atlassian checks IS's signature (JWKS), iss, aud, client_id, expiry and single use, maps the email to dana's account, and issues her token. No refresh token.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                  "type": "text"
+                },
+                {
+                  "key": "assertion",
+                  "value": "{{id_jag}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{gateway_client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{atlassian_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const t = pm.response.json();",
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('Atlassian access token, no refresh token', () => {",
+                  "    pm.expect(t.access_token).to.match(/^atl-at\\./);",
+                  "    pm.expect(t).to.not.have.property('refresh_token');",
+                  "});",
+                  "pm.collectionVariables.set('atlassian_token', t.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 2 again: an ID-JAG is single use",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{mock}}/oauth/token",
+            "description": "The same ID-JAG presented twice: refused (its jti was already used).",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                  "type": "text"
+                },
+                {
+                  "key": "assertion",
+                  "value": "{{id_jag}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{gateway_client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{atlassian_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 invalid_grant', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error).to.eql('invalid_grant');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 3: the tool call, with dana's Atlassian token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{mock}}/mcp",
+            "description": "What the gateway sends upstream: the MCP request with Authorization: Bearer <Atlassian token>, and neither the IS token nor the ID token.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atlassian_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"atlassianUserInfo\",\n    \"arguments\": {}\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function toolResult() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error, 'JSON-RPC error').to.be.undefined;",
+                  "    pm.expect(body.result.isError, 'tool error: ' + JSON.stringify(body.result.content)).to.not.equal(true);",
+                  "    return JSON.parse(body.result.content[0].text);",
+                  "}",
+                  "",
+                  "        pm.test('dana', () => pm.expect(toolResult().emailAddress).to.eql('dana@example.com'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Refresh through the gateway",
+      "description": "After an hour Copilot refreshes its token, through /idp again. IS returns a new ID\ntoken and the gateway replaces the one it kept.",
+      "item": [
+        {
+          "name": "Refresh at the gateway (/idp)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{token_endpoint}}",
+            "description": "API Manager's log shows another: ID-JAG: kept the ID token for <sub>.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "refresh_token",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{copilot_client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "refresh_token",
+                  "value": "{{refresh_token}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const t = pm.response.json();",
+                  "pm.test('200 with a new access token and ID token', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(t).to.include.keys('access_token', 'id_token');",
+                  "});",
+                  "pm.collectionVariables.set('access_token', t.access_token);",
+                  "pm.collectionVariables.set('id_token', t.id_token);",
+                  "if (t.refresh_token) pm.collectionVariables.set('refresh_token', t.refresh_token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Evidence at Atlassian (the mock)",
+      "description": "What Atlassian saw: grants made only from ID-JAGs, for dana and the gateway's\nclient, and MCP calls that carried dana's Atlassian token and nothing from WSO2.",
+      "item": [
+        {
+          "name": "Grants: every token came from an ID-JAG",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{mock}}/admin/oauth/grants",
+            "description": "One row per redeemed ID-JAG.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const g = pm.response.json().grants;",
+                  "const mine = g.filter(x => x.account === 'dana');",
+                  "pm.test('dana has grants', () => pm.expect(mine.length).to.be.above(0));",
+                  "pm.test('all via id-jag, for the gateway client, without refresh tokens', () => mine.forEach(x => {",
+                  "    pm.expect(x.via).to.eql('id-jag');",
+                  "    pm.expect(x.clientId).to.eql(pm.variables.get('gateway_client_id'));",
+                  "    pm.expect(x.liveRefreshTokens).to.eql(0);",
+                  "}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Requests: what reached the MCP tools",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{mock}}/admin/requests",
+            "description": "Authorization values are redacted by the mock to their first characters.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const calls = pm.response.json().filter(x => x.method === 'tools/call' && x.principal === 'dana');",
+                  "pm.test('dana\\'s tool calls arrived', () => pm.expect(calls.length).to.be.above(0));",
+                  "pm.test('each with an Atlassian token, never an X-ID-Token', () => calls.forEach(x => {",
+                  "    pm.expect(x.headers.authorization).to.match(/^Bearer atl-at\\./);",
+                  "    pm.expect(x.headers['x-id-token']).to.be.null;",
+                  "}));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "gateway",
+      "value": "https://localhost:8243",
+      "type": "string"
+    },
+    {
+      "key": "is_base",
+      "value": "https://localhost:9444",
+      "type": "string"
+    },
+    {
+      "key": "mock",
+      "value": "http://localhost:9500",
+      "type": "string"
+    },
+    {
+      "key": "mcp_path",
+      "value": "/atlassian-rovo/v1/mcp",
+      "type": "string"
+    },
+    {
+      "key": "copilot_client_id",
+      "value": "vscode-copilot",
+      "type": "string"
+    },
+    {
+      "key": "redirect_uri",
+      "value": "http://127.0.0.1:33418/",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "dana",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "Demo@12345",
+      "type": "string"
+    },
+    {
+      "key": "gateway_client_id",
+      "value": "wso2-mcp-gateway",
+      "type": "string"
+    },
+    {
+      "key": "gateway_client_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "atlassian_client_secret",
+      "value": "wso2-gateway-atlassian-secret-abc123",
+      "type": "string"
+    },
+    {
+      "key": "atlassian_audience",
+      "value": "http://localhost:9500",
+      "type": "string"
+    },
+    {
+      "key": "resource_metadata_url",
+      "value": "https://localhost:8243/atlassian-rovo/v1/.well-known/oauth-protected-resource",
+      "type": "string"
+    }
+  ]
+}

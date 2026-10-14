@@ -76,7 +76,13 @@ else
   gw_app=$(is_app_id "MCP Gateway"); info "created"
 fi
 gw_secret=$("${C[@]}" "${ISA[@]}" "$IS_BASE/api/server/v1/applications/$gw_app/inbound-protocols/oidc" | jq -r .clientSecret)
-umask 077; printf 'GATEWAY_CLIENT_SECRET=%s\n' "$gw_secret" > "$STATE"; umask 022
+umask 077
+printf 'GATEWAY_CLIENT_SECRET=%s\n' "$gw_secret" > "$STATE"
+# A Postman environment for postman/id-jag-walkthrough (its folder 4 acts as the gateway).
+jq -n --arg s "$gw_secret" '{name: "ID-JAG demo (local)", _postman_variable_scope: "environment",
+  values: [{key: "gateway_client_secret", value: $s, type: "secret", enabled: true}]}' > "$SETUP/postman-environment.json"
+umask 022
+info "secret saved to setup/.state.env and setup/postman-environment.json"
 
 say "IS 3. App \"GitHub Copilot VS Code\" ($COPILOT_CLIENT_ID)"
 # IS removes the port from loopback redirect URIs before matching, hence the optional port.
