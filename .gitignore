@@ -1,0 +1,12 @@
+# Product zips, unpacked packs, certificates and logs (scripts/install.sh)
+setup/*
+!setup/.gitkeep
+
+# Build output
+code/*/target/
+.venv/
+__pycache__/
+.pytest_cache/
+*.log
+
+.DS_Store

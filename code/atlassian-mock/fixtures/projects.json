@@ -1,0 +1,30 @@
+[
+  {
+    "id": "10001",
+    "key": "OPS",
+    "name": "Platform Operations",
+    "projectTypeKey": "software",
+    "lead": "Dana Whitfield",
+    "description": "Production incidents, on-call runbooks and operational hardening for the core platform.",
+    "url": "https://example-corp.atlassian.net/browse/OPS"
+  },
+  {
+    "id": "10002",
+    "key": "PLAT",
+    "name": "Core Platform",
+    "projectTypeKey": "software",
+    "lead": "Ravi Chandrasekaran",
+    "description": "Shared services: API gateway, identity, messaging and the internal developer platform.",
+    "url": "https://example-corp.atlassian.net/browse/PLAT"
+  },
+  {
+    "id": "10003",
+    "key": "WEB",
+    "name": "Web Experience",
+    "projectTypeKey": "software",
+    "lead": "Marta Nowak",
+    "description": "Customer-facing web application, design system and accessibility programme.",
+    "url": "https://example-corp.atlassian.net/browse/WEB"
+  }
+]
+

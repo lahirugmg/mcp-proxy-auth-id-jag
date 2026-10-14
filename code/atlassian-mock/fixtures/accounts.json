@@ -1,0 +1,7 @@
+{
+  "admin": {"displayName": "Platform Administrator", "accountId": "u-1000", "projects": ["*"], "repos": ["*"]},
+  "dana": {"displayName": "Dana Whitfield", "accountId": "u-1001", "projects": ["OPS", "PLAT"], "repos": ["platform-api", "infra-terraform"]},
+  "marta": {"displayName": "Marta Nowak", "accountId": "u-1003", "projects": ["WEB"], "repos": ["web-frontend", "mobile-client"]},
+  "ravi": {"displayName": "Ravi Chandrasekaran", "accountId": "u-1002", "projects": ["PLAT", "OPS", "WEB"], "repos": ["platform-api", "web-frontend", "infra-terraform", "mobile-client"]},
+  "tomas": {"displayName": "Tomás Herrera", "accountId": "u-1004", "projects": ["PLAT", "WEB"], "repos": ["platform-api", "web-frontend"]}
+}

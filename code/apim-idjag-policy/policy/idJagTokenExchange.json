@@ -1,0 +1,26 @@
+{
+  "category": "Security",
+  "name": "idJagTokenExchange",
+  "version": "v1",
+  "displayName": "ID-JAG Token Exchange",
+  "description": "On MCP tools/call, exchanges the user's ID token (kept by the gateway at sign-in, or sent in a header) for an ID-JAG at the IdP, redeems it at the upstream's authorization server, and sends the upstream token instead of the gateway token. Optionally answers the MCP server's resource metadata, so clients sign in through the gateway. Runs the IdJagTokenMediator class from code/apim-idjag-policy.",
+  "applicableFlows": ["request"],
+  "supportedGateways": ["Synapse"],
+  "supportedApiTypes": ["HTTP"],
+  "policyAttributes": [
+    {"name": "idpTokenEndpoint", "displayName": "IdP token endpoint", "description": "WSO2 IS token endpoint (step 1: ID token to ID-JAG)", "type": "String", "required": true, "validationRegex": "^https?://.+$"},
+    {"name": "idpClientId", "displayName": "IdP client ID", "description": "The gateway's client at the IdP", "type": "String", "required": true, "validationRegex": "^.+$"},
+    {"name": "idpClientSecret", "displayName": "IdP client secret", "description": "The gateway's secret at the IdP", "type": "String", "required": true, "validationRegex": "^.+$"},
+    {"name": "audience", "displayName": "Audience", "description": "Identifier of the upstream's authorization server; becomes the ID-JAG's aud", "type": "String", "required": true, "validationRegex": "^.+$"},
+    {"name": "idpScopes", "displayName": "IdP scopes", "description": "Optional scope for step 1", "type": "String", "required": false, "defaultValue": "", "validationRegex": "^.*$"},
+    {"name": "resourceAsTokenEndpoint", "displayName": "Upstream token endpoint", "description": "The upstream authorization server's token endpoint (step 2: ID-JAG to access token)", "type": "String", "required": true, "validationRegex": "^https?://.+$"},
+    {"name": "resourceAsClientId", "displayName": "Upstream client ID", "description": "The gateway's client at the upstream authorization server; same ID as at the IdP", "type": "String", "required": true, "validationRegex": "^.+$"},
+    {"name": "resourceAsClientSecret", "displayName": "Upstream client secret", "description": "The gateway's secret at the upstream authorization server", "type": "String", "required": true, "validationRegex": "^.+$"},
+    {"name": "resourceAsScopes", "displayName": "Upstream scopes", "description": "Optional scope for step 2; must be within the ID-JAG's", "type": "String", "required": false, "defaultValue": "", "validationRegex": "^.*$"},
+    {"name": "idTokenHeader", "displayName": "ID token header", "description": "Optional inbound header with the user's ID token; must name the authenticated user. Without it, the ID token kept at sign-in is used", "type": "String", "required": false, "defaultValue": "X-ID-Token", "validationRegex": "^[A-Za-z0-9-]+$"},
+    {"name": "timeoutMillis", "displayName": "Timeout (ms)", "description": "Per token request", "type": "String", "required": false, "defaultValue": "10000", "validationRegex": "^[0-9]+$"},
+    {"name": "tlsInsecureSkipVerify", "displayName": "Skip TLS verification", "description": "Local development only. Import the IdP's certificate into the gateway trust store instead", "type": "String", "required": false, "defaultValue": "false", "validationRegex": "^(true|false)$"},
+    {"name": "authorizationServer", "displayName": "Sign-in server", "description": "When set, the gateway answers the MCP server's resource metadata itself, naming this sign-in server (the gateway's /idp address for the IdP). Empty: APIM answers", "type": "String", "required": false, "defaultValue": "", "validationRegex": "^(https?://.+)?$"},
+    {"name": "scopesSupported", "displayName": "Scopes advertised", "description": "scopes_supported in that resource metadata: openid plus the MCP tools' scopes", "type": "String", "required": false, "defaultValue": "openid", "validationRegex": "^.*$"}
+  ]
+}

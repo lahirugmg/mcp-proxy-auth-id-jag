@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="420" viewBox="0 0 1080 420" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1F5FA8"/></marker>
+  </defs>
+  <rect width="1080" height="420" fill="#fff"/>
+  <!-- groups -->
+  <rect x="230" y="40" width="380" height="360" rx="8" fill="#F3F7FC" stroke="#7A9CC6"/>
+  <text x="420" y="62" text-anchor="middle" font-size="14" font-weight="bold" fill="#1F3F66">WSO2 API Manager 4.6.0 — gateway :8243</text>
+  <rect x="760" y="230" width="300" height="170" rx="8" fill="#F6F6F6" stroke="#999"/>
+  <text x="910" y="252" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">Atlassian (mock :9500)</text>
+  <!-- boxes -->
+  <g font-size="14" text-anchor="middle">
+    <rect x="20" y="170" width="140" height="90" rx="6" fill="#FFFFFF" stroke="#555"/>
+    <text x="90" y="200" font-weight="bold">GitHub Copilot</text><text x="90" y="218">in VS Code</text>
+    <text x="90" y="242" font-size="11.5" font-style="italic" fill="#555">holds only an IS token</text>
+
+    <rect x="280" y="80" width="300" height="60" rx="6" fill="#fff" stroke="#555"/>
+    <text x="430" y="105" font-weight="bold">REST API /idp</text><text x="430" y="125" font-size="12.5" fill="#333">IdpProxyMediator: relays IS, keeps ID tokens</text>
+
+    <rect x="280" y="185" width="300" height="60" rx="18" fill="#FFF8E1" stroke="#B8962E"/>
+    <text x="430" y="210" font-weight="bold">IdTokenStore</text><text x="430" y="230" font-size="12.5" fill="#333">latest ID token per user (sub)</text>
+
+    <rect x="280" y="295" width="300" height="80" rx="6" fill="#fff" stroke="#555"/>
+    <text x="430" y="320" font-weight="bold">MCP server /atlassian-rovo/v1/mcp</text>
+    <text x="430" y="340" font-size="12.5" fill="#333">APIM: token, tool scope, subscription</text>
+    <text x="430" y="358" font-size="12.5" fill="#333">IdJagTokenMediator (gateway policy)</text>
+
+    <rect x="760" y="40" width="300" height="110" rx="6" fill="#EEF6EE" stroke="#5E8F5E"/>
+    <text x="910" y="70" font-weight="bold">WSO2 Identity Server 7.3 :9444</text>
+    <text x="910" y="92" font-size="12.5" fill="#333">sign-in, PKCE · tool scopes by role</text>
+    <text x="910" y="112" font-size="12.5" fill="#333">ID-JAG grant (token exchange)</text>
+
+    <rect x="785" y="265" width="250" height="50" rx="6" fill="#fff" stroke="#555"/>
+    <text x="910" y="286" font-weight="bold">Authorization server</text><text x="910" y="304" font-size="12.5" fill="#333">jwt-bearer grant</text>
+    <rect x="785" y="335" width="250" height="50" rx="6" fill="#fff" stroke="#555"/>
+    <text x="910" y="356" font-weight="bold">Rovo MCP tools</text><text x="910" y="374" font-size="12.5" fill="#333">Jira · Bitbucket</text>
+  </g>
+  <!-- arrows -->
+  <g fill="none" stroke="#444" stroke-width="1.6">
+    <path d="M160,195 H200 V110 H278" marker-end="url(#a)"/>
+    <path d="M160,235 H200 V335 H278" marker-end="url(#a)"/>
+    <path d="M90,170 V22 H990 V38" stroke-dasharray="5,4" marker-end="url(#a)"/>
+    <path d="M430,140 V183" marker-end="url(#a)"/>
+    <path d="M430,245 V293" marker-end="url(#a)"/>
+    <path d="M580,95 H758" marker-end="url(#a)"/>
+    <path d="M1010,265 V152" stroke-dasharray="5,4" marker-end="url(#a)"/>
+  </g>
+  <g fill="none" stroke="#1F5FA8" stroke-width="2.2">
+    <path d="M580,310 H720 V125 H758" marker-end="url(#b)"/>
+    <path d="M580,343 H700 V290 H783" marker-end="url(#b)"/>
+    <path d="M580,365 H783" marker-end="url(#b)"/>
+  </g>
+  <!-- labels -->
+  <g font-size="12.5" fill="#222">
+    <text x="196" y="102" text-anchor="end">token + refresh</text>
+    <text x="196" y="327" text-anchor="end">MCP + IS token</text>
+    <text x="530" y="16" text-anchor="middle">browser sign-in at IS (login pages not proxied)</text>
+    <text x="438" y="167">keeps id_token</text>
+    <text x="422" y="276" text-anchor="end">looked up per call</text>
+    <text x="670" y="88" text-anchor="middle">relayed</text>
+    <text x="1002" y="214" text-anchor="end">trusts IS signing keys</text>
+  </g>
+  <g font-size="12.5" fill="#1F5FA8" font-weight="bold">
+    <text x="714" y="272" text-anchor="end">① ID token → ID-JAG</text>
+    <text x="588" y="337">② ID-JAG → token</text>
+    <text x="588" y="384">③ MCP + user's token</text>
+  </g>
+</svg>

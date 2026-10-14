@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ID-JAG for the WSO2 API Manager 4.6.0 gateway: Synapse class mediators run by
+  custom policies. IdJagTokenMediator (a gateway policy) exchanges the user's ID
+  token on MCP tools/call; IdpProxyMediator (on the /idp API) keeps each user's ID
+  token as WSO2 IS's token responses pass through the gateway.
+
+  Compiles against the JARs inside the APIM pack itself, so no WSO2 Maven
+  repository is needed. scripts/install.sh passes -Dapim.home and the exact jar
+  versions found in your pack (-Dv.gateway=... and so on); the defaults below are
+  those of the pack this was tested with.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.wso2.mcpgov</groupId>
+  <artifactId>idjag-gateway-policy</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>ID-JAG gateway policy for APIM 4.6.0</name>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <apim.home>${project.basedir}/../../setup/wso2am-4.6.0</apim.home>
+    <apim.plugins>${apim.home}/repository/components/plugins</apim.plugins>
+
+    <!-- Jar versions in the tested pack; scripts/install.sh overrides them with yours. -->
+    <v.gateway>9.32.147.94</v.gateway>
+    <v.synapse.core>4.0.0.wso2v262_10</v.synapse.core>
+    <v.synapse.commons>4.0.0.wso2v262</v.synapse.commons>
+    <v.synapse.transport>4.0.0.wso2v262_7</v.synapse.transport>
+    <v.axis2>1.6.1.wso2v111_3</v.axis2>
+    <v.axiom>1.2.11.wso2v30_7</v.axiom>
+    <v.paxlogging>2.3.2.wso2v3</v.paxlogging>
+    <v.gson>2.11.0</v.gson>
+  </properties>
+
+  <dependencies>
+    <!--
+      Tests only. pax-logging-api (below) carries commons-logging and log4j APIs that
+      need a running OSGi framework, so surefire leaves it off the test classpath and
+      this plain commons-logging (same version as APIM's lib/) logs through
+      java.util.logging instead. In APIM the server provides logging; this never ships.
+    -->
+    <dependency>
+      <groupId>commons-logging</groupId>
+      <artifactId>commons-logging</artifactId>
+      <version>1.3.5</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.wso2.carbon.apimgt</groupId>
+      <artifactId>org.wso2.carbon.apimgt.gateway</artifactId>
+      <version>${v.gateway}</version>
+      <scope>system</scope>
+      <systemPath>${apim.plugins}/org.wso2.carbon.apimgt.gateway_${v.gateway}.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.synapse</groupId>
+      <artifactId>synapse-core</artifactId>
+      <version>${v.synapse.core}</version>
+      <scope>system</scope>
+      <systemPath>${apim.plugins}/synapse-core_${v.synapse.core}.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.synapse</groupId>
+      <artifactId>synapse-commons</artifactId>
+      <version>${v.synapse.commons}</version>
+      <scope>system</scope>
+      <systemPath>${apim.plugins}/synapse-commons_${v.synapse.commons}.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.synapse</groupId>
+      <artifactId>synapse-nhttp-transport</artifactId>
+      <version>${v.synapse.transport}</version>
+      <scope>system</scope>
+      <systemPath>${apim.plugins}/synapse-nhttp-transport_${v.synapse.transport}.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.axis2</groupId>
+      <artifactId>axis2</artifactId>
+      <version>${v.axis2}</version>
+      <scope>system</scope>
+      <systemPath>${apim.plugins}/axis2_${v.axis2}.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.ws.commons.axiom</groupId>
+      <artifactId>axiom</artifactId>
+      <version>${v.axiom}</version>
+      <scope>system</scope>
+      <systemPath>${apim.plugins}/axiom_${v.axiom}.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>org.ops4j.pax.logging</groupId>
+      <artifactId>pax-logging-api</artifactId>
+      <version>${v.paxlogging}</version>
+      <scope>system</scope>
+      <systemPath>${apim.plugins}/org.ops4j.pax.logging.pax-logging-api_${v.paxlogging}.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>${v.gson}</version>
+      <scope>system</scope>
+      <systemPath>${apim.plugins}/com.google.gson_${v.gson}.jar</systemPath>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.12.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.3</version>
+        <configuration>
+          <redirectTestOutputToFile>true</redirectTestOutputToFile>
+          <classpathDependencyExcludes>
+            <classpathDependencyExclude>org.ops4j.pax.logging:pax-logging-api</classpathDependencyExclude>
+          </classpathDependencyExcludes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

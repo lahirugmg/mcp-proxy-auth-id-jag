@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "atlassian-via-wso2": {
+      "type": "http",
+      "url": "https://localhost:8243/atlassian-rovo/v1/mcp",
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}

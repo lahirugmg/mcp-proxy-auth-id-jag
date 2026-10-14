@@ -1,0 +1,13 @@
+{
+  "category": "Security",
+  "name": "idpProxy",
+  "version": "v1",
+  "displayName": "IdP Proxy (keep ID tokens)",
+  "description": "Response flow of the gateway's /idp API, which relays WSO2 IS's sign-in metadata and token endpoint. Points token_endpoint at the gateway, removes registration_endpoint, and keeps each user's ID token for the ID-JAG token exchange. Runs the IdpProxyMediator class from code/apim-idjag-policy.",
+  "applicableFlows": ["response"],
+  "supportedGateways": ["Synapse"],
+  "supportedApiTypes": ["HTTP"],
+  "policyAttributes": [
+    {"name": "publicBaseUrl", "displayName": "Gateway address for the IdP", "description": "The /idp API's URL on the gateway, e.g. https://localhost:8243/idp", "type": "String", "required": true, "validationRegex": "^https?://.+$"}
+  ]
+}

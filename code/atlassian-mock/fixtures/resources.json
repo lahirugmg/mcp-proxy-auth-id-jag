@@ -1,0 +1,15 @@
+[
+  {
+    "id": "a1b2c3d4-1111-2222-3333-444455556666",
+    "name": "example-corp",
+    "url": "https://example-corp.atlassian.net",
+    "scopes": [
+      "read:jira-work",
+      "read:jira-user",
+      "read:repository:bitbucket",
+      "read:pullrequest:bitbucket"
+    ],
+    "avatarUrl": "https://example-corp.atlassian.net/avatar.png"
+  }
+]
+

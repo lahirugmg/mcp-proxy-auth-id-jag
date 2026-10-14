@@ -1,0 +1,52 @@
+
+        <!--
+            Configuration for the custom ID-JAG (Identity Assertion JWT Authorization Grant) token exchange
+            extension. Every element is optional; scripts/install.sh sets the deployment.toml keys.
+        -->
+        <IDJAG>
+            {% if oauth.idjag.subject_claim_uri is defined %}
+            <SubjectClaimUri>{{oauth.idjag.subject_claim_uri}}</SubjectClaimUri>
+            {% endif %}
+            {% if oauth.idjag.issuer is defined %}
+            <Issuer>{{oauth.idjag.issuer}}</Issuer>
+            {% endif %}
+            {% if oauth.idjag.audience is defined %}
+            <Audience>{{oauth.idjag.audience}}</Audience>
+            {% endif %}
+            {% if oauth.idjag.force_audience is defined %}
+            <ForceAudience>{{oauth.idjag.force_audience}}</ForceAudience>
+            {% endif %}
+            {% if oauth.idjag.client_id is defined %}
+            <ClientId>{{oauth.idjag.client_id}}</ClientId>
+            {% endif %}
+            {% if oauth.idjag.use_app_client_id is defined %}
+            <UseAppClientId>{{oauth.idjag.use_app_client_id}}</UseAppClientId>
+            {% endif %}
+            {% if oauth.idjag.static_claims is defined %}
+            <StaticClaims>{{oauth.idjag.static_claims}}</StaticClaims>
+            {% endif %}
+            {% if oauth.idjag.resource is defined %}
+            <Resource>{{oauth.idjag.resource}}</Resource>
+            {% endif %}
+            {% if oauth.idjag.additional_claims is defined %}
+            <AdditionalClaims>{{oauth.idjag.additional_claims}}</AdditionalClaims>
+            {% endif %}
+            {% if oauth.idjag.validity_period is defined %}
+            <ValidityPeriodInSeconds>{{oauth.idjag.validity_period}}</ValidityPeriodInSeconds>
+            {% endif %}
+            {% if oauth.idjag.iat_validity_period is defined %}
+            <IATValidityPeriodInMinutes>{{oauth.idjag.iat_validity_period}}</IATValidityPeriodInMinutes>
+            {% endif %}
+            {% if oauth.idjag.allowed_audiences is defined %}
+            <AllowedAudiences>{{oauth.idjag.allowed_audiences}}</AllowedAudiences>
+            {% endif %}
+            {% if oauth.idjag.require_subject_claim is defined %}
+            <RequireSubjectClaim>{{oauth.idjag.require_subject_claim}}</RequireSubjectClaim>
+            {% endif %}
+            {% if oauth.idjag.allow_access_token_subject_token is defined %}
+            <AllowAccessTokenSubjectToken>{{oauth.idjag.allow_access_token_subject_token}}</AllowAccessTokenSubjectToken>
+            {% endif %}
+            {% if oauth.idjag.allow_refresh_token_subject_token is defined %}
+            <AllowRefreshTokenSubjectToken>{{oauth.idjag.allow_refresh_token_subject_token}}</AllowRefreshTokenSubjectToken>
+            {% endif %}
+        </IDJAG>

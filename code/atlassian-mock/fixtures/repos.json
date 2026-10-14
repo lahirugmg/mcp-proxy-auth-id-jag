@@ -1,0 +1,51 @@
+[
+  {
+    "slug": "platform-api",
+    "name": "Platform API",
+    "project": "PLAT",
+    "language": "java",
+    "isPrivate": true,
+    "mainBranch": "main",
+    "size": 48213904,
+    "updatedOn": "2026-07-30T14:22:11.000Z",
+    "description": "Core REST and event APIs backing the platform. Spring Boot, deployed to EKS.",
+    "url": "https://bitbucket.org/example-corp/platform-api"
+  },
+  {
+    "slug": "web-frontend",
+    "name": "Web Frontend",
+    "project": "WEB",
+    "language": "typescript",
+    "isPrivate": true,
+    "mainBranch": "main",
+    "size": 19844112,
+    "updatedOn": "2026-08-03T09:47:53.000Z",
+    "description": "Customer-facing React application and the shared design system package.",
+    "url": "https://bitbucket.org/example-corp/web-frontend"
+  },
+  {
+    "slug": "infra-terraform",
+    "name": "Infrastructure (Terraform)",
+    "project": "OPS",
+    "language": "hcl",
+    "isPrivate": true,
+    "mainBranch": "main",
+    "size": 7331200,
+    "updatedOn": "2026-08-01T17:05:02.000Z",
+    "description": "Terraform modules for VPC, EKS, RDS and observability stacks across all environments.",
+    "url": "https://bitbucket.org/example-corp/infra-terraform"
+  },
+  {
+    "slug": "mobile-client",
+    "name": "Mobile Client",
+    "project": "WEB",
+    "language": "kotlin",
+    "isPrivate": true,
+    "mainBranch": "develop",
+    "size": 26109440,
+    "updatedOn": "2026-07-21T11:38:29.000Z",
+    "description": "Android client. Shares the design tokens published by web-frontend.",
+    "url": "https://bitbucket.org/example-corp/mobile-client"
+  }
+]
+
