@@ -94,6 +94,17 @@ def _signing_key(kid: str | None) -> Any:
         return _keys[kid]
 
 
+def _check_audience(aud: Any) -> None:
+    """draft-ietf-oauth-identity-assertion-authz-grant section 4.4.1: aud must
+    identify a single authorization server, as a string or a one-element array."""
+    if isinstance(aud, list):
+        if len(aud) != 1:
+            raise IdJagError(f"The ID-JAG's aud must name a single authorization server, not {aud!r}")
+        aud = aud[0]
+    if aud != settings.idjag_audience:
+        raise IdJagError(f"The ID-JAG is not addressed to this server ({settings.idjag_audience})")
+
+
 def verify(assertion: str, client_id: str) -> dict[str, Any]:
     """Return the ID-JAG's claims, or raise IdJagError saying why not."""
     if not assertion:
@@ -111,20 +122,21 @@ def verify(assertion: str, client_id: str) -> dict[str, Any]:
             _signing_key(header.get("kid")),
             algorithms=ALGORITHMS,
             issuer=settings.idjag_issuer,
-            audience=settings.idjag_audience,
             leeway=LEEWAY_SECONDS,
-            options={"require": ["iss", "sub", "aud", "exp", "iat", "jti"]},
+            # aud is checked by hand below: PyJWT's own audience check accepts an
+            # array with any number of matching elements, not just one.
+            options={"require": ["iss", "sub", "aud", "exp", "iat", "jti"], "verify_aud": False},
         )
     except pyjwt.InvalidSignatureError as exc:
         raise IdJagError("The ID-JAG's signature does not verify against the IdP's keys") from exc
     except pyjwt.InvalidIssuerError as exc:
         raise IdJagError(f"The ID-JAG is not from the trusted IdP {settings.idjag_issuer}") from exc
-    except pyjwt.InvalidAudienceError as exc:
-        raise IdJagError(f"The ID-JAG is not addressed to this server ({settings.idjag_audience})") from exc
     except pyjwt.ExpiredSignatureError as exc:
         raise IdJagError("The ID-JAG has expired") from exc
     except pyjwt.PyJWTError as exc:
         raise IdJagError(f"The ID-JAG is invalid: {exc}") from exc
+
+    _check_audience(claims.get("aud"))
 
     if claims.get("client_id") != client_id:
         raise IdJagError(

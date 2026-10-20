@@ -422,6 +422,9 @@ tail -f setup/wso2am-4.6.0/repository/logs/wso2carbon.log | grep ID-JAG
 - **WSO2 IS** silently drops scopes it does not know, and matches loopback
   redirect URIs with the port removed. Copilot's app therefore uses
   `regexp=(http://127\.0\.0\.1(:[0-9]+)?/|https://vscode\.dev/redirect|…)`.
+- **The mock verifies the IdP's TLS certificate by default** (`IDP_VERIFY_TLS=true`)
+  when fetching WSO2 IS's JWKS; `scripts/start.sh` sets `IDP_VERIFY_TLS=false`
+  for this local demo, since the local IS ships a self-signed certificate.
 
 ## Limitations and next steps
 

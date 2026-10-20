@@ -21,7 +21,9 @@ if mock_up; then info "Atlassian mock already running"
 else
   mkdir -p "$SETUP/logs"
   # A session of its own, so the mock outlives the terminal that started it.
-  ( cd "$REPO/code/atlassian-mock" && exec nohup python3 -c \
+  # The local WSO2 IS has a self-signed certificate, so TLS verification of
+  # its JWKS endpoint is off here; IDP_VERIFY_TLS defaults to true otherwise.
+  ( cd "$REPO/code/atlassian-mock" && IDP_VERIFY_TLS=false exec nohup python3 -c \
       'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' ./run.sh \
       > "$SETUP/logs/mock.log" 2>&1 < /dev/null ) &
   echo $! > "$SETUP/logs/mock.pid"
