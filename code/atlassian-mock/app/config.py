@@ -49,10 +49,10 @@ class Settings:
         ).split()
     )
 
-    # Fetching the JWKS from WSO2 IS. A local IS ships a self-signed certificate,
-    # so TLS verification is off by default; set IDP_VERIFY_TLS=true once the IS
-    # certificate is trusted.
-    idp_verify_tls: bool = _env("IDP_VERIFY_TLS", "false").lower() in {"1", "true", "yes", "on"}
+    # Fetching the JWKS from WSO2 IS. TLS verification is on by default; a local
+    # IS ships a self-signed certificate, so local dev sets IDP_VERIFY_TLS=false
+    # explicitly (see scripts/start.sh) until the IS certificate is trusted.
+    idp_verify_tls: bool = _env("IDP_VERIFY_TLS", "true").lower() in {"1", "true", "yes", "on"}
     idp_timeout_seconds: int = int(_env("IDP_TIMEOUT_SECONDS", "6"))
 
 

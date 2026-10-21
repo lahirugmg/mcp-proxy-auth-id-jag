@@ -87,6 +87,25 @@ def test_addressed_to_another_authorization_server(client):
     assert "not addressed to this server" in refused(redeem(client, id_jag(aud="https://auth.example.org")))
 
 
+# --- aud must identify a single authorization server (draft-ietf-oauth-identity-assertion-authz-grant §4.4.1) --
+
+def test_aud_as_a_multi_element_array_is_refused_even_when_one_element_matches(client):
+    aud = [settings.idjag_audience, "https://auth.example.org"]
+    assert "single authorization server" in refused(redeem(client, id_jag(aud=aud)))
+
+
+def test_aud_as_a_single_element_array_with_the_correct_value_is_accepted(client):
+    assert redeem(client, id_jag(aud=[settings.idjag_audience])).status_code == 200
+
+
+def test_aud_as_a_plain_string_with_the_correct_value_is_accepted(client):
+    assert redeem(client, id_jag(aud=settings.idjag_audience)).status_code == 200
+
+
+def test_aud_as_a_single_element_array_with_the_wrong_value_is_refused(client):
+    assert "not addressed to this server" in refused(redeem(client, id_jag(aud=["https://auth.example.org"])))
+
+
 def test_from_another_issuer(client):
     assert "trusted IdP" in refused(redeem(client, id_jag(iss="https://idp.example.org")))
 
